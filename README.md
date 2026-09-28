@@ -22,11 +22,6 @@ Run `source .venv/bin/activate` from the project root whenever you open a new te
 
 The supplied configurations use `solver.taichi.arch: 'cuda'`. For CPU execution, change this value to `'cpu'` in the YAML file you plan to run. Set `visualization.enabled: false` to run without the live visualization window.
 
-Before running on **Linux/macOS**, edit each YAML configuration you will use:
-
-- Use forward slashes in paths; for example, set `output.directory` to `'./results'` instead of `'.\results'` or `'.\results\'`.
-- On macOS, set `solver.taichi.arch` to `'cpu'`. On Linux, use `'cpu'` for CPU execution or retain `'cuda'` for an NVIDIA GPU with CUDA support.
-
 ## Usage
 
 Open a terminal in the project root (the folder containing `main.py`). On **Windows (PowerShell)**, run the default configuration:
