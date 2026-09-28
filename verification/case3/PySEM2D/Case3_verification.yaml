@@ -1,0 +1,297 @@
+# ======================================================================================
+#            ██████  ██    ██ ███████ ███████ ███    ███ 
+#            ██   ██  ██  ██  ██      ██      ████  ████ 
+#            ██████    ████   ███████ █████   ██ ████ ██ 
+#            ██         ██         ██ ██      ██  ██  ██ 
+#            ██         ██    ███████ ███████ ██      ██ 
+# ======================================================================================
+# PySEM2D: An open-source spectral element solver for elastic wave propagation 
+#        in isotropic and anisotropic media
+# Version: 1.0
+# Feature: GPU/CPU Acceleration supported by Taichi framework
+# Author: Hui Shen
+# Institute: Wuhan University of Technology
+# Department: School of Civil Engineering and Architecture
+# Email: hshen@whut.edu.cn
+# Note: This is a configuration file for PySEM2D, you can modify the following  
+#       parameters to customize your simulation. The detailed explanation of each
+#       parameter can be found in the context of the file.
+# ======================================================================================
+
+# ----------------------------------------------------------------------------
+# Simulation Parameters
+# ----------------------------------------------------------------------------
+simulation:
+  # title of the simulation case (optional)
+  title: 'Seismic wave propogation in a complex mountain model'
+
+  # Model dimension (2D)
+  ndim: 2
+  
+  # Polynomial order (P), supported range: 2~6
+  # P+1=NGLL, for example, P=4 corresponds to NGLL=5
+  # The total node number per quadrilateral element is determined by the polynomial order,
+  # e.g., for P=2, each element has 3x3=9 nodes; for P=5, each element has 6x6=36 nodes.
+  polynomial_order: 4
+  
+  # Time step (seconds)
+  dt: 5.0e-5
+  
+  # Number of time steps
+  nt: 20001
+
+# ----------------------------------------------------------------------------
+# Mesh Configuration
+# ----------------------------------------------------------------------------
+mesh:
+  # Input mesh format: 'gmsh' or 'abaqus'
+  format: 'abaqus'
+  
+  # if format is 'gmsh':
+  # Mesh file path of GMSH format (if you already have .msh file)
+  # Note: if you use '.msh' file directly, make sure that the quadrilateral element 
+  #       order in the '.msh' file must match the 'polynomial_order' defined above.
+  #msh_file: './mesh/Mount_order2.msh' # if you use this .msh file, make sure polynomial_order=2
+  
+  # if format is 'abaqus':
+  # ABAQUS input file (will automatically converted to Gmsh msh)
+  inp_file: './mesh/Mountain.inp'
+  #msh_file: 'Mount_gmsh.msh' # if not specified, auto-generate based on inp_file
+
+# ----------------------------------------------------------------------------
+# Material Properties
+# ----------------------------------------------------------------------------
+material:
+  # Physics model type: 'elastic_isotropic', 'elastic_anisotropic'.
+  # This determines which wave equations will be solved
+  type: 'elastic_isotropic'
+  
+  # Material definition using 'physical_groups' in gmsh file
+  # Physical group properties (must match those physical group names defined in the msh file)
+  physical_groups:
+    'Set-M1':
+      rho: 2300  # Density (kg/m^3)
+      vp: 2000   # P-wave velocity (m/s)
+      vs: 1154   # S-wave velocity (m/s)
+    
+    'Set-M2':
+      rho: 2500
+      vp: 2500
+      vs: 1443
+    
+    'Set-M3':
+      rho: 2600
+      vp: 3000
+      vs: 1732
+    
+    'Set-M4':
+      rho: 2700
+      vp: 3500
+      vs: 2021
+
+    'Set-M5':
+      rho: 2700
+      vp: 4000
+      vs: 2309
+
+# ----------------------------------------------------------------------------
+# Boundary Conditions
+# ----------------------------------------------------------------------------
+boundary:
+  # PML (Perfectly Matched Layer) settings
+  
+  # PML on specific boundaries
+  enable_PML_left: true
+  enable_PML_right: true
+  enable_PML_bottom: true
+  
+  # Top boundary: false = free surface (default), true = PML absorbing boundary
+  enable_PML_top: false
+
+  # PML thickness (meters)
+  x_thickness: 500
+  z_thickness: 500
+
+
+# ----------------------------------------------------------------------------
+# Source Configuration
+# ----------------------------------------------------------------------------
+# Multiple source support: Each source can have independent parameters
+sources:
+  groups:
+    # Source 1: Main seismic source
+    #- position: [2000, 1000]        # Source location [x, z] in meters
+    #  force_angle: 135                # Force direction angle in degrees (0=right, 90=up)
+    #  amplitude: 1.0e2               # Source amplitude
+    #  f0: 15                         # Dominant frequency in Hz
+    #  time_func_type: 'gabor'       # Time function: 'ricker', 'gaussian', or 'gabor'
+    #  # Optional parameters (uncomment to customize):
+    #  time_delay: 0.0              # Time delay before activation (seconds)
+    #  gamma: 4.0                   # Width parameter for Gabor wavelet
+    #  theta: 1.5708                # Phase parameter for Gabor wavelet (π/2)
+    
+    # Example: Add more sources by uncommenting below
+    - position: [1085.57, 538.24]
+      force_angle: 45
+      amplitude: 5.0e10
+      f0: 20
+      time_func_type: 'gaussian'
+      time_delay: 0.0              # Activate 0.1s after first source
+
+
+# ----------------------------------------------------------------------------
+# Receiver Configuration
+# ----------------------------------------------------------------------------
+receivers:
+  # Receiver groups (can define multiple groups)
+  groups:
+    - name: 'h_array'
+      # Type: 'line' (linear distribution) or 'file' (read from file)
+      type: 'line'
+      
+      # Start and end coordinates [x, z] (for line type)
+      start: [500, 860]
+      end: [1500, 860]
+      num: 11 # Number of receivers (for line type)
+
+      # Recording types: 1=displacement, 2=velocity, 3=acceleration
+      rec_type: [1]
+    
+    #- name: 'v_array'
+    #  # Type: 'line' (linear distribution) or 'file' (read from file)
+    #  type: 'line'
+    #  
+    #  # Start and end coordinates [x, z] (for line type)
+    #  start: [1500, 1000]
+    #  end: [1500, 1500]
+    #  num: 21 # Number of receivers (for line type)
+
+    #  # Recording types: 1=displacement, 2=velocity, 3=acceleration
+    #  rec_type: [1]
+    
+    # Example: Additional receiver group from file
+    # - name: 'vertical_array'
+    #   type: 'file'
+    #   file: './receivers/vertical_array.txt'
+    #   rec_type: [1, 2, 3]
+
+
+# ----------------------------------------------------------------------------
+# Output Configuration
+# ----------------------------------------------------------------------------
+output:
+  # Base output directory for simulation results
+  # 
+  # The path is resolved relative to the current working directory where you 
+  # execute the program, NOT relative to the location of this config file.
+  # 
+  # Supported formats:
+  # 
+  # 1. Relative path (recommended for portability):
+  #    directory: 'results_yaml_config'
+  #    directory: './results_yaml_config', '../results', './results/mycase'
+  #    - Results will be saved relative to where you run the command
+  #    - Example: If you run "python path\to\PySEM\main.py" from C:\Users\Darkgrey\Desktop\SEM\,
+  #      output goes to C:\Users\Darkgrey\Desktop\SEM\results_yaml_config\
+  # 
+  # 2. Absolute path (for fixed output location):
+  #    Linux/Mac:   directory: '/home/user/simulations/results'
+  #    Windows:     directory: 'D:/MyResults/output'  (use forward slashes)
+  #    Windows:     directory: 'D:\MyResults\output'  (backslashes also work)
+  #    - Results will always be saved to the specified absolute path
+  #    - Independent of where you run the simulation
+  # 
+  # Note: The directory and its subdirectories (snapshots/, seismograms/, 
+  #       stations/) will be created automatically if they don't exist.
+  directory: '.\results'
+# Terminal output settings
+  terminal:
+    # Progress print interval (number of time steps)
+    # Controls how often progress information is printed to the terminal
+    progress_print_interval: 500
+  
+  # Wavefield snapshot settings (for ParaView visualization)
+  snapshot:
+    # Enable snapshot output
+    enabled: true
+    
+    # Snapshot interval (number of time steps)
+    interval: 500
+    
+    # Output format: 'vtu' or 'h5' (h5 not yet implemented)
+    format: 'vtu'
+    
+    # Fields to output: 1=displacement, 2=velocity, 3=acceleration
+    fields: [1, 2, 3]
+    
+    # Enable asynchronous file writing (improves performance)
+    async_write: true
+  
+  # Seismogram settings
+  seismogram:
+    # Save seismogram files (PNG and CSV)
+    enabled: true
+
+# ----------------------------------------------------------------------------
+# Real-time Visualization Configuration
+# ----------------------------------------------------------------------------
+visualization:
+  # Enable high-performance real-time wavefield visualization using Taichi GUI
+  # Disable for better performance when real-time visualization is not needed
+  enabled: true
+  
+  # Visualization interval (number of time steps)
+  interval: 100
+  
+  # Field type to visualize: 1=displacement, 2=velocity, 3=acceleration
+  field_type: 1
+  
+  # Colormap scheme for visualization: 'jet' or 'viridis'
+  # - 'jet': Blue->Cyan->Green->Yellow->Red (good for magnitude, gray background)
+  # - 'viridis': Purple->Blue->Green->Yellow (perceptually uniform, white background)
+  colormap: 'jet'
+
+# ----------------------------------------------------------------------------
+# Solver Settings
+# ----------------------------------------------------------------------------
+solver:
+  # Fast computation mode (moves entire time loop into GPU kernel)
+  # - false: Step-by-step mode (supports real-time visualization, slower)
+  # - true: Fast mode (no real-time viz, faster, requires more GPU memory)
+  # Note: Fast mode automatically disables real-time visualization
+  fast_mode: false
+  
+  # Taichi backend configuration
+  # Note: The solver type (CPU/GPU) is automatically inferred from the 'arch' setting.
+  #       If arch='cpu', then CPU mode is used; otherwise GPU mode is used.
+  taichi:
+    # Backend architecture: 'cuda', 'vulkan', 'metal', 'cpu'
+    # - cuda: NVIDIA GPUs (best performance for NVIDIA cards) -> GPU mode
+    # - vulkan: Cross-platform GPU (AMD, Intel, NVIDIA) -> GPU mode
+    # - metal: Apple GPUs (macOS/iOS only) -> GPU mode
+    # - cpu: CPU multi-threading with Taichi acceleration -> CPU mode
+    arch: 'cuda'
+    
+    # Floating point precision: 'f32' or 'f64'
+    # f64 (double precision) is recommended for scientific computing
+    default_fp: 'f32'
+    
+    # GPU-specific settings (only used when arch is cuda/vulkan/metal)
+    gpu:
+      # Device memory allocation in GB (optional, default: 8.0)
+      # Will be auto-adjusted if exceeds available GPU memory
+      # If not specified, Taichi will use default settings
+      device_memory_gb: 8.0
+      
+      # GPU device ID for multi-GPU systems (optional, default: 0)
+      # device_id: 0
+    
+    # CPU-specific settings (only used when arch is cpu)
+    cpu:
+      # Maximum number of CPU threads (optional, default: 4)
+      # Will be auto-adjusted if exceeds available CPU cores
+      max_num_threads: 4
+      
+      # CPU vector width for SIMD operations (optional, default: 8)
+      # Common values are 4, 8, or 16
+      # default_vector_width: 8
