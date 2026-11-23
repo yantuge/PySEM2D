@@ -26,38 +26,17 @@ class GPUSparseMatrix:
         self.nnz = scipy_sparse_matrix.nnz
         self.format = format
         
-        if format == 'csr':
-            # Convert to CSR format
-            csr = scipy_sparse_matrix.tocsr()
-            
-            # Create Taichi fields for CSR format
-            # data: non-zero values
-            # indices: column indices of non-zero values
-            # indptr: row pointers
-            self.data = ti.field(dtype=float, shape=self.nnz)
-            self.indices = ti.field(dtype=ti.i32, shape=self.nnz)
-            self.indptr = ti.field(dtype=ti.i32, shape=self.nrows + 1)
-            
-            # Copy data to GPU
-            self.data.from_numpy(csr.data.astype(TaichiConfig.get_np_float_type()))
-            self.indices.from_numpy(csr.indices.astype(np.int32))
-            self.indptr.from_numpy(csr.indptr.astype(np.int32))
-        else:
-            # Convert to CSC format
-            csc = scipy_sparse_matrix.tocsc()
-            
-            # Create Taichi fields for CSC format
-            # data: non-zero values
-            # indices: row indices of non-zero values
-            # indptr: column pointers
-            self.data = ti.field(dtype=float, shape=self.nnz)
-            self.indices = ti.field(dtype=ti.i32, shape=self.nnz)
-            self.indptr = ti.field(dtype=ti.i32, shape=self.ncols + 1)
-            
-            # Copy data to GPU
-            self.data.from_numpy(csc.data.astype(TaichiConfig.get_np_float_type()))
-            self.indices.from_numpy(csc.indices.astype(np.int32))
-            self.indptr.from_numpy(csc.indptr.astype(np.int32))
+        storage = scipy_sparse_matrix.tocsr() if format == 'csr' else scipy_sparse_matrix.tocsc()
+        # A disabled damping direction has empty rows. Taichi still requires
+        # positive field dimensions. The zero pointers keep this slot unused.
+        capacity = max(1, storage.nnz)
+        self.data = ti.field(dtype=float, shape=capacity)
+        self.indices = ti.field(dtype=ti.i32, shape=capacity)
+        self.indptr = ti.field(dtype=ti.i32, shape=storage.indptr.size)
+        if storage.nnz:
+            self.data.from_numpy(storage.data.astype(TaichiConfig.get_np_float_type()))
+            self.indices.from_numpy(storage.indices.astype(np.int32))
+        self.indptr.from_numpy(storage.indptr.astype(np.int32))
 
 
 @ti.data_oriented
@@ -81,6 +60,7 @@ class SEMGPUKernels:
         self.num_receivers = num_receivers
         self.nt = nt
         self.fast_mode = fast_mode
+        self.fixed_outer = ti.field(dtype=ti.i32, shape=num_nodes)
         self.num_sources = num_sources
         self.num_snapshots = num_snapshots
         
@@ -563,6 +543,13 @@ class SEMGPUKernels:
         更新历史项并合成总位移
         """
         for i in range(self.num_nodes):
+            # Homogeneous displacement at the exterior face of each PML.
+            if self.fixed_outer[i]:
+                self.displ_new_term1[i] = ti.Vector.zero(float, 2)
+                self.displ_new_term2[i] = ti.Vector.zero(float, 2)
+                self.displ_new_term3[i] = ti.Vector.zero(float, 2)
+                self.p_x[i] = ti.Vector.zero(float, 2)
+                self.p_z[i] = ti.Vector.zero(float, 2)
             # Update history for PML
             self.displ_old_term1[i] = self.displ_now_term1[i]
             self.displ_old_term2[i] = self.displ_now_term2[i]
@@ -615,17 +602,18 @@ class SEMGPUKernels:
         force_x = sin_angle * stf_val
         force_z = cos_angle * stf_val
         
-        # 计算力引起的位移增量：Δu = M⁻¹ · F · dt²
-        dt_sq = dt * dt
-        M_inv = 1.0 / self.M[src_idx]
-        
-        displ_increment_x = M_inv * force_x * dt_sq
-        displ_increment_z = M_inv * force_z * dt_sq
-        
-        # 将位移增量叠加到当前位移场
-        self.displ_now[src_idx][0] += displ_increment_x
-        self.displ_now[src_idx][1] += displ_increment_z
-    
+        self._apply_nodal_force(src_idx, force_x, force_z)
+
+    @ti.func
+    def _apply_nodal_force(self, node_idx, fx, fz):
+        # Drive the mixed split equation and keep its recombined value in sync.
+        # In the physical domain A2_inv equals dt**2 / mass.
+        if not self.fixed_outer[node_idx]:
+            for c in ti.static(range(2)):
+                du = self.A2_inv[node_idx] * ti.Vector([fx, fz])[c]
+                self.displ_now_term2[node_idx][c] += du
+                self.displ_now[node_idx][c] += du
+
     def add_moment_tensor_source(self, ispec, source_array, stf_val, dt):
         """
         添加矩震源贡献, 矩震源将力分布到震源所在单元的所有GLL节点
@@ -636,45 +624,15 @@ class SEMGPUKernels:
             stf_val: float, 当前时间步的震源时间函数值
             dt: float, 时间步长
         """
-        NGLL = source_array.shape[1]
-        dt_sq = dt * dt
-        
-        # 遍历单元内所有GLL点，添加震源贡献
-        for j in range(NGLL):
-            for i in range(NGLL):
-                # 获取全局节点索引
-                iglob = self.mt_connectivity[ispec, j, i]
-                
-                # 计算力分量
-                force_x = source_array[0, i, j] * stf_val
-                force_z = source_array[1, i, j] * stf_val
-                
-                # 获取质量矩阵逆
-                M_inv = 1.0 / self.M[iglob]
-                
-                # 计算位移增量并叠加
-                displ_increment_x = M_inv * force_x * dt_sq
-                displ_increment_z = M_inv * force_z * dt_sq
-                
-                # 使用单点kernel叠加（避免竞争条件）
-                self._add_moment_source_contribution(
-                    iglob, displ_increment_x, displ_increment_z
-                )
-    
+        self._add_element_force(self.mt_connectivity[ispec], source_array, stf_val)
+
     @ti.kernel
-    def _add_moment_source_contribution(self, node_idx: ti.i32, 
-                                         dx: float, dz: float):
-        """
-        将矩震源贡献叠加到指定节点
-        
-        参数:
-            node_idx: int, 全局节点索引
-            dx: float, x方向位移增量
-            dz: float, z方向位移增量
-        """
-        self.displ_now[node_idx][0] += dx
-        self.displ_now[node_idx][1] += dz
-        
+    def _add_element_force(self, nodes: ti.types.ndarray(), weights: ti.types.ndarray(),
+                           stf: float):
+        for j, i in ti.ndrange(nodes.shape[0], nodes.shape[1]):
+            self._apply_nodal_force(nodes[j, i], weights[0, i, j] * stf,
+                                    weights[1, i, j] * stf)
+
     @ti.kernel
     def record_seismograms_disp(self, it: ti.i32):
         """
@@ -974,7 +932,7 @@ class SEMGPUKernels:
             'acceleration': acc
         }
     
-    def run_full_time_loop_batch(self, nt, dt, snapshot_interval, enable_snapshot):
+    def run_full_time_loop_batch(self, nt, dt, snapshot_interval, enable_snapshot, moment_source_step=None):
         """
         在快速模式下执行完整时间循环
         
@@ -1096,7 +1054,10 @@ class SEMGPUKernels:
             self.update_history_and_combine()
             
             # Step 4: Add sources (using batch source data)
-            self._add_batch_sources(it, dt)
+            if moment_source_step is None:
+                self._add_batch_sources(it, dt)
+            else:
+                moment_source_step(it)
             
             # Step 5: Compute derivatives
             if it >= 1:
@@ -1118,7 +1079,6 @@ class SEMGPUKernels:
         """
         批量添加震源
         """
-        dt_sq = dt * dt
         for src_idx in range(self.num_sources):
             actual_time = it - self.source_time_delays[src_idx]
             if 0 <= actual_time < self.nt:
@@ -1128,9 +1088,7 @@ class SEMGPUKernels:
                 force_x = self.source_sin_angles[src_idx] * stf_val
                 force_z = self.source_cos_angles[src_idx] * stf_val
                 
-                M_inv = 1.0 / self.M[node_idx]
-                self.displ_now[node_idx][0] += M_inv * force_x * dt_sq
-                self.displ_now[node_idx][1] += M_inv * force_z * dt_sq
+                self._apply_nodal_force(node_idx, force_x, force_z)
     
     @ti.kernel
     def _record_batch_seismograms(self, it: ti.i32):

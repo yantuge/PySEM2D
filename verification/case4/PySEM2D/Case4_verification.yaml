@@ -149,9 +149,10 @@ sources:
       Mxx: 1.0                        # Normalized moment tensor component (explosion: Mxx=Mzz=1)
       Mzz: 1.0                        # Normalized moment tensor component
       Mxz: 0.0                        # Normalized moment tensor component
-      amplitude: 1.0e10               # Source amplitude (controls physical magnitude)
+      amplitude: -1.0e10               # Source amplitude (controls physical magnitude)
       f0: 20                          # Dominant frequency in Hz
-      time_func_type: 'gaussian'      # Time function type
+      time_func_type: 'ricker'      # Time function type
+      t0: 0.06
       time_delay: 0.0                 # Time delay (seconds)
 
 

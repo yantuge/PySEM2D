@@ -132,10 +132,11 @@ sources:
     
     # Example: Add more sources by uncommenting below
     - position: [1085.57, 538.24]
-      force_angle: 45
-      amplitude: 5.0e10
+      force_angle: -135
+      amplitude: 1.0e4
       f0: 20
-      time_func_type: 'gaussian'
+      time_func_type: 'ricker'
+      t0: 0.06
       time_delay: 0.0              # Activate 0.1s after first source
 
 
@@ -274,7 +275,7 @@ solver:
     
     # Floating point precision: 'f32' or 'f64'
     # f64 (double precision) is recommended for scientific computing
-    default_fp: 'f32'
+    default_fp: 'f64'
     
     # GPU-specific settings (only used when arch is cuda/vulkan/metal)
     gpu:
