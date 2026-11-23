@@ -126,10 +126,11 @@ sources:
     # Example: Add more sources by uncommenting below
     - source_type: 'force'         # Source type: 'force' or 'moment_tensor'
       position: [2500, -2500]
-      force_angle: 180
+      force_angle: 0
       amplitude: 1.0e10
       f0: 8
-      time_func_type: 'gaussian'
+      time_func_type: 'ricker'
+      t0: 0.15
       time_delay: 0.0              # Activate 0.1s after first source
 
 

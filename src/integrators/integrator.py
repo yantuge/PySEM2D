@@ -141,6 +141,14 @@ class Integrator(TimeIntegratorBase):
         Cxz = mass_damping['Cxz']
         Czz = mass_damping['Czz']
         
+        if self.p.get('use_pml_or_not') and hasattr(self.compute_backend, 'kernels'):
+            x, z = self.mesh.global_nodes.T
+            fixed = np.zeros(M.size, dtype=bool)
+            for coord, damping, bound in ((x, Cx, 'xmin'), (x, Cx, 'xmax'),
+                                          (z, Cz, 'zmin'), (z, Cz, 'zmax')):
+                fixed |= (damping > 0) & np.isclose(coord, self.p[bound], rtol=0, atol=1e-8)
+            self.compute_backend.kernels.fixed_outer.from_numpy(fixed.astype(np.int32))
+
         # 4. 计算逆矩阵
         print("  Computing inverse matrices...")
         A1 = a0 * M + a1 * 2 * Cx
@@ -535,7 +543,11 @@ class Integrator(TimeIntegratorBase):
             
         # 步骤1: 预加载震源数据到GPU
         print(f"Preloading source data to {backen_name}...")
-        self._preload_sources_to_gpu()
+        moment_source_step = None
+        if self.source.source_type == 'moment_tensor':
+            moment_source_step = self.add_sources
+        else:
+            self._preload_sources_to_gpu()
         
         # 步骤2: 在GPU中执行完整时间循环
         print(f"\nExecuting full time loop on {backen_name}...")
@@ -547,7 +559,7 @@ class Integrator(TimeIntegratorBase):
         backend = self.compute_backend
         if hasattr(backend, 'kernels'):
             backend.kernels.run_full_time_loop_batch(
-                nt, dt, snapshot_interval, enable_snapshot
+                nt, dt, snapshot_interval, enable_snapshot, moment_source_step
             )
         else:
             raise NotImplementedError(

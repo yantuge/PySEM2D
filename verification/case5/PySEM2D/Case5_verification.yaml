@@ -148,10 +148,11 @@ sources:
     # A point force applied at a single node
     - source_type: 'force'            # Source type: 'force' or 'moment_tensor'
       position: [1085.57, 538.24]     # Source location [x, z] in meters
-      force_angle: 45                 # Force direction angle in degrees (0=right, 90=up)
-      amplitude: 1.0e10               # Source amplitude
+      force_angle: -135                 # Measured from +z toward +x (degrees)
+      amplitude: 1.0e7               # Source amplitude
       f0: 20                          # Dominant frequency in Hz
-      time_func_type: 'gaussian'      # Time function: 'ricker', 'gaussian', 'dgaussian', or 'gabor'
+      time_func_type: 'ricker'      # Time function: 'ricker', 'gaussian', 'dgaussian', or 'gabor'
+      t0: 0.06
       time_delay: 0.0                 # Time delay before activation (seconds)
     
     # ========== Moment Tensor Source Example ==========

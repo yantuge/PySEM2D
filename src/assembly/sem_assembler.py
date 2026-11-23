@@ -350,8 +350,8 @@ class SEMAssembler(AssemblerBase):
                     Ke2 += factor * np.outer(dphi_dz_flat, dphi_dz_flat)
                     Ke3 += factor * np.outer(dphi_dx_flat, dphi_dz_flat)
                     Ke4 += factor * np.outer(dphi_dz_flat, dphi_dx_flat)
-                    Ke5 += factor * np.outer(dphi_dx_flat, phi_flat)
-                    Ke6 += factor * np.outer(dphi_dz_flat, phi_flat)
+                    Ke5 += factor * np.outer(phi_flat, dphi_dx_flat)
+                    Ke6 += factor * np.outer(phi_flat, dphi_dz_flat)
             
             # 添加到全局COO列表
             for i in range(NGLL*NGLL):
@@ -555,9 +555,9 @@ class SEMAssembler(AssemblerBase):
                                         ti.atomic_add(k4_field[e, idx_ij, idx_i2j2], 
                                                      factor * dphi_dz_ij * dphi_dx_i2j2)
                                         ti.atomic_add(k5_field[e, idx_ij, idx_i2j2], 
-                                                     factor * dphi_dx_ij * phi_i2j2)
+                                                     factor * phi_ij * dphi_dx_i2j2)
                                         ti.atomic_add(k6_field[e, idx_ij, idx_i2j2], 
-                                                     factor * dphi_dz_ij * phi_i2j2)
+                                                     factor * phi_ij * dphi_dz_i2j2)
         
         # 执行GPU计算
         print(f"    Computing element stiffness on GPU...")

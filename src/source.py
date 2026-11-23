@@ -342,12 +342,7 @@ class Source:
                 source_array[0, k, m] += Mxx * dsrc_dx + Mxz * dsrc_dz
                 source_array[1, k, m] += Mxz * dsrc_dx + Mzz * dsrc_dz
         
-        # 归一化震源数组
-        max_val = np.max(np.abs(source_array))
-        if max_val > 0:
-            source_array = source_array / max_val
-            print(f"    Source {src_idx+1}: normalization factor = {max_val:.6e}")
-        
+        # The physical basis gradients carry inverse-length units.
         return source_array
     
     def get_source_array(self, src_idx):
